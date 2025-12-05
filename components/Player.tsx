@@ -40,7 +40,8 @@ export const Player = () => {
   useEffect(() => api.position.subscribe((p) => (position.current = p)), [api.position]);
 
   const state = useThree();
-  const cameraOffset = new THREE.Vector3(0, 6, 10);
+  // Adjust camera offset for a better view
+  const cameraOffset = new THREE.Vector3(0, 5, 12); 
   const lookAtOffset = new THREE.Vector3(0, 0, -10);
   const currentLookAt = useRef(new THREE.Vector3(0,0,-10));
 
@@ -102,15 +103,17 @@ export const Player = () => {
     // Bounds check
     if (position.current[1] < -5) endGame();
     
-    // Camera Follow
+    // --- Camera Follow Logic ---
     const carPos = new THREE.Vector3(position.current[0], position.current[1], position.current[2]);
     const targetCamPos = carPos.clone().add(cameraOffset);
     
-    // Smooth camera lerp
-    state.camera.position.lerp(targetCamPos, delta * 3);
+    // Tighter follow on Z axis to prevent lagging behind at high speeds
+    state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, targetCamPos.x, delta * 5);
+    state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, targetCamPos.y, delta * 5);
+    state.camera.position.z = THREE.MathUtils.lerp(state.camera.position.z, targetCamPos.z, delta * 15); // Increased Z lerp speed
     
     const targetLook = carPos.clone().add(lookAtOffset);
-    currentLookAt.current.lerp(targetLook, delta * 4);
+    currentLookAt.current.lerp(targetLook, delta * 10);
     state.camera.lookAt(currentLookAt.current);
   });
 
