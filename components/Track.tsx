@@ -67,7 +67,7 @@ export const Track: React.FC<{ playerZ: number }> = ({ playerZ }) => {
   return (
     <group>
       {/* The Track Strip */}
-      <TrackStrip playerZ={playerZ} />
+      <TrackStrip />
       
       {/* Obstacles */}
       {obstacles.map(obs => (
@@ -77,12 +77,27 @@ export const Track: React.FC<{ playerZ: number }> = ({ playerZ }) => {
   );
 };
 
-const TrackStrip: React.FC<{ playerZ: number }> = ({ playerZ }) => {
-  const [ref] = useBox(() => ({ 
+const TrackStrip: React.FC = () => {
+  // Main Floor Physics (Static, Long)
+  useBox(() => ({ 
     type: 'Static', 
-    args: [ROAD_WIDTH, 1, 1000], 
-    position: [0, -0.5, playerZ - 200] 
-  }), useRef<THREE.Mesh>(null));
+    args: [ROAD_WIDTH, 1, 10000], 
+    position: [0, -0.5, -5000] 
+  }));
+  
+  // Left Border Physics (Invisible Wall)
+  useBox(() => ({
+    type: 'Static',
+    args: [1, 5, 10000], // Height 5 to contain the car
+    position: [ROAD_WIDTH / 2 + 0.5, 2, -5000]
+  }));
+
+  // Right Border Physics (Invisible Wall)
+  useBox(() => ({
+    type: 'Static',
+    args: [1, 5, 10000],
+    position: [-(ROAD_WIDTH / 2 + 0.5), 2, -5000]
+  }));
   
   return (
     <group position={[0, -0.5, -5000]}>
@@ -97,7 +112,7 @@ const TrackStrip: React.FC<{ playerZ: number }> = ({ playerZ }) => {
             />
         </mesh>
         
-        {/* Side Rails (Orange Plastic) */}
+        {/* Side Rails (Visual only, aligned with physics borders) */}
         <mesh position={[ROAD_WIDTH/2 + 0.5, 0.5, 0]} receiveShadow castShadow>
              <boxGeometry args={[1, 1, 10000]} />
              <primitive object={plasticOrange} attach="material" />
