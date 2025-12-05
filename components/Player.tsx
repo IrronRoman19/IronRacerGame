@@ -10,9 +10,17 @@ const CHASSIS_HEIGHT = 0.5;
 const CHASSIS_LENGTH = 3.5;
 
 export const Player = () => {
-  const { gameState, endGame, setScore, setSpeed } = useGameStore();
+  const { gameState, endGame, setScore, setSpeed, damage } = useGameStore();
   const [sub, get] = useKeyboardControls();
+  const lastDamageTime = useRef(0);
   
+  // Refs to access latest state inside callbacks
+  const gameStateRef = useRef(gameState);
+  
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
   // Physics Body - Arcade style
   // Mass 1 for snappy response.
   const [ref, api] = useBox(() => ({
@@ -23,11 +31,21 @@ export const Player = () => {
     linearDamping: 0.5, // Higher damping to stop quickly (arcade feel)
     fixedRotation: true, 
     onCollide: (e) => {
-        if (gameState === 'playing') {
-             // Check impact magnitude
+        // Use ref to get current game state, avoiding stale closure
+        if (gameStateRef.current === 'playing') {
              const impact = e.contact.impactVelocity;
-             if (impact > 10) { // Threshold adjusted for lower mass
-                endGame();
+             const now = Date.now();
+             
+             // Threshold for taking damage (ignore tiny bumps)
+             // Lowered threshold to 2 to ensure wall hits register
+             if (impact > 2 && now - lastDamageTime.current > 500) {
+                 // Fixed damage: 5% of max health (which is 100) -> 5 points
+                 const damageAmount = 5;
+                 
+                 // Call damage via getState to ensure we use the store action directly
+                 useGameStore.getState().damage(damageAmount);
+                 
+                 lastDamageTime.current = now;
              }
         }
     }
@@ -60,7 +78,11 @@ export const Player = () => {
     
     const currentSpeed = -velocity.current[2];
     setSpeed(Math.floor(currentSpeed * 10)); 
-    setScore(Math.floor(Math.abs(position.current[2] / 5)));
+    
+    // Calculate score based on Z position. 
+    // Forward is negative Z, so we negate it to get positive distance.
+    // Backward (behind start) becomes negative distance.
+    setScore(Math.floor(-position.current[2] / 5));
 
     const maxSpeed = 100;
     
@@ -71,7 +93,11 @@ export const Player = () => {
     if (forward && currentSpeed < maxSpeed) {
       api.applyLocalImpulse([0, 0, -accelForce], [0, 0, 0]);
     } else if (backward) {
-      api.applyLocalImpulse([0, 0, accelForce * 0.5], [0, 0, 0]);
+      // Restrict backward movement if at or behind start line (z >= -1 buffer)
+      // Moving backward adds positive Z force
+      if (position.current[2] < -1.0) {
+         api.applyLocalImpulse([0, 0, accelForce * 0.5], [0, 0, 0]);
+      }
     }
 
     if (left) {
@@ -100,7 +126,7 @@ export const Player = () => {
         api.applyLocalForce([0, -10, 0], [0, 0, 0]);
     }
     
-    // Bounds check
+    // Bounds check - Falling off map is instant death
     if (position.current[1] < -5) endGame();
     
     // --- Camera Follow Logic ---
@@ -117,10 +143,13 @@ export const Player = () => {
     state.camera.lookAt(currentLookAt.current);
   });
 
+  const isInvulnerable = useGameStore(s => Date.now() < s.invulnerableEndTime);
+
   return (
     <group ref={ref}>
       <ToyShipModel />
       <SparkParticles />
+      {isInvulnerable && <ShieldEffect />}
     </group>
   );
 };
@@ -159,6 +188,24 @@ const ToyShipModel = () => {
                 <meshStandardMaterial color="#00d2ff" />
             </mesh>
         </group>
+    )
+}
+
+const ShieldEffect = () => {
+    const shieldRef = useRef<THREE.Mesh>(null);
+    useFrame((state) => {
+        if(shieldRef.current) {
+            shieldRef.current.rotation.y += 0.05;
+            shieldRef.current.rotation.z += 0.02;
+            const s = 1.1 + Math.sin(state.clock.elapsedTime * 4) * 0.05;
+            shieldRef.current.scale.setScalar(s);
+        }
+    })
+    return (
+        <mesh ref={shieldRef}>
+            <sphereGeometry args={[2.2, 24, 24]} />
+            <meshBasicMaterial color="#3b82f6" transparent opacity={0.3} wireframe />
+        </mesh>
     )
 }
 
